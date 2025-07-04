@@ -12,11 +12,12 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 
-const PORT = process.env.PORT || 5000;
+// ************************************************************
+// CAMBIO AQUI: Convertir process.env.PORT a un número
+// ************************************************************
+const PORT = parseInt(process.env.PORT || '5000', 10); // Convierte a número. '5000' es el fallback string.
 
-app.listen(PORT, () => {
-  // Cambia este console.log para que no diga localhost
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor listo y escuchando en el puerto ${PORT}`);
-  // También puedes añadir un log para el entorno
   console.log(`Entorno: ${process.env.NODE_ENV}`);
 });
