@@ -10,10 +10,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use('/api/auth', authRoutes);
-app.use('/api/users', usersRoutes); // ✅ Aquí usas el Router, NO un handler
+app.use('/api/users', usersRoutes);
 
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`Servidor listo en http://localhost:${PORT}`);
+  // Cambia este console.log para que no diga localhost
+  console.log(`Servidor listo y escuchando en el puerto ${PORT}`);
+  // También puedes añadir un log para el entorno
+  console.log(`Entorno: ${process.env.NODE_ENV}`);
 });
