@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import pool from '../config/db';
+import { pool } from '../config/db';
+
 
 export const createReserva = async (req: Request, res: Response) => {
   // --- Paso de depuración: Imprimir el body de la solicitud para verificar ---
