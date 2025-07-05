@@ -6,6 +6,14 @@ import authRoutes from './routes/auth.routes';
 
 dotenv.config();
 
+// Mostrar variables de entorno relevantes al iniciar (solo para debug)
+console.log('=== Variables de entorno al iniciar servidor ===');
+console.log('PORT:', process.env.PORT);
+console.log('DATABASE_URL:', process.env.DATABASE_URL);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('RAILWAY_ENVIRONMENT:', process.env.RAILWAY_ENVIRONMENT);
+console.log('===============================================');
+
 const app = express();
 
 // Middlewares
