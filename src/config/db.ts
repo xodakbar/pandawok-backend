@@ -1,8 +1,8 @@
 import { Pool } from 'pg';
-import dns from 'dns'; // No necesitamos dotenv si Railway inyecta las variables
+import dns from 'dns';
 
 // --- INICIO: Logs de depuración para variables de entorno ---
-console.log('--- DEBUG: Variables de Entorno al inicio de db.ts (SIMPLIFICADO) ---');
+console.log('--- DEBUG: Variables de Entorno al inicio de db.ts (SIN DOTENV) ---');
 console.log('process.env.NODE_ENV:', process.env.NODE_ENV);
 console.log('process.env.RAILWAY_ENVIRONMENT:', process.env.RAILWAY_ENVIRONMENT); // Esta variable la inyecta Railway
 console.log('process.env.DATABASE_URL (RAW):', process.env.DATABASE_URL);
@@ -23,9 +23,7 @@ if (process.env.DATABASE_URL) {
   poolConfig = {
     connectionString: process.env.DATABASE_URL,
     ssl: {
-      // Generalmente no es necesario rechazar certificados para conexiones internas en Railway
-      // Si tu backend se conecta desde fuera de Railway, podrías necesitar una configuración SSL específica.
-      rejectUnauthorized: false // Puede ser necesario si la DB tiene un certificado autofirmado o no reconocido
+      rejectUnauthorized: false
     },
   };
 } else {
@@ -45,25 +43,22 @@ if (process.env.DATABASE_URL) {
     password: process.env.DB_PASSWORD,
     port: parseInt(process.env.DB_PORT || '5432', 10),
     ssl: {
-      rejectUnauthorized: false, // Mantener esto si es absolutamente necesario para tu setup
+      rejectUnauthorized: false,
     },
   };
 }
 
-// Crea una nueva instancia de Pool con la configuración determinada
 const pool = new Pool(poolConfig);
 
-// Intentar conexión inmediata para validar al iniciar la app
 pool.connect()
   .then(client => {
     console.log('✅ Conexión exitosa a la base de datos PostgreSQL en Railway.');
-    client.release(); // Libera el cliente de vuelta al pool
+    client.release();
   })
   .catch(err => {
     console.error('❌ Error al conectar a la base de datos en Railway:', err);
-    console.error('Detalles de la configuración del pool que causó el error:', poolConfig); // Para depuración
-    process.exit(1); // Salir de la aplicación si la conexión a la DB falla
+    console.error('Detalles de la configuración del pool que causó el error:', poolConfig);
+    process.exit(1);
   });
 
-// ¡¡¡Esta línea es la exportación por defecto del pool!!!
 export default pool;
