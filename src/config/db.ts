@@ -1,47 +1,42 @@
 import { Pool } from 'pg';
 import dns from 'dns';
+import dotenv from 'dotenv';
 
-// --- INICIO: Logs de depuración para variables de entorno ---
-console.log('--- DEBUG: Variables de Entorno al inicio de db.ts (SIN DOTENV) ---');
-console.log('process.env.NODE_ENV:', process.env.NODE_ENV);
-console.log('process.env.RAILWAY_ENVIRONMENT:', process.env.RAILWAY_ENVIRONMENT); // Esta variable la inyecta Railway
-console.log('process.env.DATABASE_URL (RAW):', process.env.DATABASE_URL);
-console.log('process.env.DB_USER (RAW):', process.env.DB_USER);
-console.log('process.env.DB_HOST (RAW):', process.env.DB_HOST);
-console.log('process.env.DB_NAME (RAW):', process.env.DB_NAME);
-console.log('process.env.DB_PASSWORD (RAW):', process.env.DB_PASSWORD);
-console.log('process.env.DB_PORT (RAW):', process.env.DB_PORT);
-console.log('--- FIN: Logs de depuración ---');
+// Cargar variables de entorno en desarrollo local
+dotenv.config();
 
+// Priorizar uso de IPv4 para evitar problemas con DNS en algunos entornos
 dns.setDefaultResultOrder('ipv4first');
 
-let poolConfig: any;
+console.log('--- DEBUG: Variables de Entorno al inicio de db.ts ---');
+console.log('process.env.NODE_ENV:', process.env.NODE_ENV);
+console.log('process.env.RAILWAY_ENVIRONMENT:', process.env.RAILWAY_ENVIRONMENT);
+console.log('process.env.DATABASE_URL:', process.env.DATABASE_URL);
+console.log('process.env.DB_USER:', process.env.DB_USER);
+console.log('process.env.DB_HOST:', process.env.DB_HOST);
+console.log('process.env.DB_NAME:', process.env.DB_NAME);
+console.log('process.env.DB_PASSWORD:', process.env.DB_PASSWORD);
+console.log('process.env.DB_PORT:', process.env.DB_PORT);
+console.log('--- FIN: Logs de depuración ---');
 
-// Priorizar DATABASE_URL si está disponible (es la forma preferida en Railway)
+let poolConfig;
+
 if (process.env.DATABASE_URL) {
   console.log('Usando DATABASE_URL para la conexión a la base de datos.');
   poolConfig = {
     connectionString: process.env.DATABASE_URL,
     ssl: {
-      rejectUnauthorized: false
+      rejectUnauthorized: false,
     },
   };
 } else {
-  // Fallback a variables individuales si DATABASE_URL no está definida
-  console.log('Usando variables individuales (DB_USER, DB_HOST, etc.) para la conexión como fallback.');
-  console.log('Variables de entorno de la Base de Datos (para Railway) - Fallback:', {
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    port: process.env.DB_PORT,
-  });
-
+  console.log('Usando variables individuales para la conexión a la base de datos.');
   poolConfig = {
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
     database: process.env.DB_NAME,
     password: process.env.DB_PASSWORD,
-    port: parseInt(process.env.DB_PORT || '5432', 10),
+    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
     ssl: {
       rejectUnauthorized: false,
     },
@@ -52,12 +47,12 @@ const pool = new Pool(poolConfig);
 
 pool.connect()
   .then(client => {
-    console.log('✅ Conexión exitosa a la base de datos PostgreSQL en Railway.');
+    console.log('✅ Conexión exitosa a la base de datos PostgreSQL.');
     client.release();
   })
   .catch(err => {
-    console.error('❌ Error al conectar a la base de datos en Railway:', err);
-    console.error('Detalles de la configuración del pool que causó el error:', poolConfig);
+    console.error('❌ Error al conectar a la base de datos:', err);
+    console.error('Configuración utilizada:', poolConfig);
     process.exit(1);
   });
 
