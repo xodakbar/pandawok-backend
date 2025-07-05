@@ -17,7 +17,7 @@ const app = express();
 
 // Middleware CORS configurado para permitir solo tu frontend en Netlify
 app.use(cors({
-  origin: 'https://tu-sitio-netlify.netlify.app'  // Cambia por tu URL real
+  origin: 'https://pandawok-netlify.netlify.app'  // Cambia por tu URL real
 }));
 
 app.use(express.json());
