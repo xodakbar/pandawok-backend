@@ -1,11 +1,10 @@
 import { Pool } from 'pg';
-import dotenv from 'dotenv';
-import dns from 'dns';
+import dns from 'dns'; // No necesitamos dotenv si Railway inyecta las variables
 
 // --- INICIO: Logs de depuración para variables de entorno ---
-console.log('--- DEBUG: Variables de Entorno al inicio de db.ts ---');
+console.log('--- DEBUG: Variables de Entorno al inicio de db.ts (SIMPLIFICADO) ---');
 console.log('process.env.NODE_ENV:', process.env.NODE_ENV);
-console.log('process.env.RAILWAY_ENVIRONMENT:', process.env.RAILWAY_ENVIRONMENT);
+console.log('process.env.RAILWAY_ENVIRONMENT:', process.env.RAILWAY_ENVIRONMENT); // Esta variable la inyecta Railway
 console.log('process.env.DATABASE_URL (RAW):', process.env.DATABASE_URL);
 console.log('process.env.DB_USER (RAW):', process.env.DB_USER);
 console.log('process.env.DB_HOST (RAW):', process.env.DB_HOST);
@@ -14,18 +13,6 @@ console.log('process.env.DB_PASSWORD (RAW):', process.env.DB_PASSWORD);
 console.log('process.env.DB_PORT (RAW):', process.env.DB_PORT);
 console.log('--- FIN: Logs de depuración ---');
 
-// Solo carga dotenv.config() si no estamos en un entorno de producción como Railway
-// donde las variables ya son inyectadas. Esto evita posibles conflictos.
-// Si las variables de Railway no se están inyectando, este `dotenv.config()` podría ser necesario.
-// Para depuración, podríamos comentarlo temporalmente si sospechamos que interfiere.
-if (process.env.NODE_ENV !== 'production' || !process.env.RAILWAY_ENVIRONMENT) {
-  console.log('Cargando variables de entorno desde .env (no es Railway prod o no se detecta RAILWAY_ENVIRONMENT).');
-  dotenv.config();
-} else {
-  console.log('Asumiendo entorno de producción en Railway, no cargando .env.');
-}
-
-// Configura el orden de resolución de DNS para preferir IPv4
 dns.setDefaultResultOrder('ipv4first');
 
 let poolConfig: any;
