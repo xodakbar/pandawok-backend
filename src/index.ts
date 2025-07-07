@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import usersRoutes from './routes/users.routes';
 import authRoutes from './routes/auth.routes';
+import clientRoutes from './routes/client.routes'; // Importa correctamente la ruta clients
 
 dotenv.config();
 
@@ -15,21 +16,39 @@ console.log('===============================================');
 
 const app = express();
 
-// Middleware CORS configurado para permitir solo tu frontend en Netlify
+// Lista blanca para CORS (frontends permitidos)
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://pandawok.netlify.app',
+];
+
 app.use(cors({
-  origin: 'https://pandawok.netlify.app', // aquí pon la URL real de Netlify, por ejemplo "https://pandawok-netify.netlify.app"
-  credentials: true, // si usas cookies o autenticación que lo requiera
+  origin: (origin, callback) => {
+    // Permite solicitudes sin origin (como Postman) o si está en la lista blanca
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
 }));
 
+// Middleware para parsear JSON en el body
 app.use(express.json());
 
+// Ruta base para testear que la API funciona
 app.get('/', (req, res) => {
   res.status(200).send('API está funcionando correctamente!');
 });
+
+// Rutas con prefijos
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/clients', clientRoutes); // Clientes con prefijo /api/clients
 
-const PORT = parseInt(process.env.PORT || '8080', 10);
+// Validar puerto y arrancar servidor
+const PORT = Number(process.env.PORT) || 8080;
 if (isNaN(PORT)) {
   console.error('ERROR: La variable de entorno PORT no es un número válido.');
   process.exit(1);
