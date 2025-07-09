@@ -243,7 +243,7 @@ export const getReservaById = async (req: Request, res: Response) => {
       SELECT r.*, 
              c.id as cliente_id,
              c.nombre, c.apellido, c.telefono, c.correo_electronico, c.es_frecuente, c.en_lista_negra,
-             c.notas as cliente_notas, c.tags, c.visitas, c.ultima_visita, c.gasto_total, c.gasto_por_visita
+             c.notas as cliente_notas
       FROM reservas r
       LEFT JOIN clientes c ON c.id = r.cliente_id
       WHERE r.id = $1
@@ -274,11 +274,6 @@ export const getReservaById = async (req: Request, res: Response) => {
             es_frecuente: row.es_frecuente,
             en_lista_negra: row.en_lista_negra,
             notas: row.cliente_notas,
-            tags: row.tags,
-            visitas: row.visitas,
-            ultima_visita: row.ultima_visita,
-            gasto_total: row.gasto_total,
-            gasto_por_visita: row.gasto_por_visita,
           }
         : null,
     };
