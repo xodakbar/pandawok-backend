@@ -72,3 +72,75 @@ export const actualizarPosicionMesa = async (req: Request, res: Response): Promi
     res.status(500).json({ message: 'Error interno del servidor' });
   }
 };
+
+// Agregar una nueva mesa con validación de unicidad
+export const agregarMesa = async (req: Request, res: Response): Promise<void> => {
+  const { salon_id, numero_mesa, tipo_mesa, tamanio, capacidad, esta_activa, posX, posY } = req.body;
+
+  // Validaciones básicas
+  if (
+    typeof salon_id !== 'number' ||
+    typeof numero_mesa !== 'string' ||
+    typeof tipo_mesa !== 'string' ||
+    typeof tamanio !== 'string' ||
+    typeof capacidad !== 'number' ||
+    typeof esta_activa !== 'boolean' ||
+    typeof posX !== 'number' ||
+    typeof posY !== 'number'
+  ) {
+    res.status(400).json({ message: 'Datos inválidos o incompletos para crear mesa' });
+    return;
+  }
+
+  try {
+    // Validar que no exista una mesa con el mismo numero_mesa en el mismo salon_id
+    const checkQuery = `SELECT id FROM mesas WHERE salon_id = $1 AND numero_mesa = $2`;
+    const { rows: existingRows } = await pool.query(checkQuery, [salon_id, numero_mesa]);
+
+    if (existingRows.length > 0) {
+      res.status(400).json({ message: `Ya existe una mesa con el número ${numero_mesa} en este salón.` });
+      return;
+    }
+
+    const insertQuery = `
+      INSERT INTO mesas 
+      (salon_id, numero_mesa, tipo_mesa, tamanio, capacidad, esta_activa, posx, posy)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, salon_id, numero_mesa, tipo_mesa, tamanio, capacidad, esta_activa, posx AS "posX", posy AS "posY"
+    `;
+
+    const values = [salon_id, numero_mesa, tipo_mesa, tamanio, capacidad, esta_activa, posX, posY];
+
+    const { rows } = await pool.query(insertQuery, values);
+
+    res.status(201).json({ message: 'Mesa creada exitosamente', mesa: rows[0] });
+  } catch (error) {
+    console.error('Error creando mesa:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+};
+
+// Eliminar una mesa por id
+export const eliminarMesa = async (req: Request, res: Response): Promise<void> => {
+  const mesaId = Number(req.params.id);
+
+  if (isNaN(mesaId)) {
+    res.status(400).json({ message: 'ID de mesa inválido' });
+    return;
+  }
+
+  try {
+    const query = 'DELETE FROM mesas WHERE id = $1 RETURNING id';
+
+    const { rows } = await pool.query(query, [mesaId]);
+
+    if (rows.length === 0) {
+      res.status(404).json({ message: 'Mesa no encontrada' });
+    } else {
+      res.json({ message: 'Mesa eliminada correctamente' });
+    }
+  } catch (error) {
+    console.error('Error eliminando mesa:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+};

@@ -5,7 +5,7 @@ const PG_UNIQUE_VIOLATION = '23505';
 const PG_FOREIGN_KEY_VIOLATION = '23503';
 const PG_INVALID_TEXT_REPRESENTATION = '22P02';
 
-// Crear reserva
+// Crear reserva con cliente
 export const createReserva = async (req: Request, res: Response) => {
   const client = await pool.connect();
 
@@ -124,14 +124,67 @@ export const createReserva = async (req: Request, res: Response) => {
   }
 };
 
-// Obtener todas las reservas
+// Crear reserva sin cliente (Walk-in)
+export const createReservaWalkIn = async (req: Request, res: Response) => {
+  const client = await pool.connect();
+
+  try {
+    const {
+      mesa_id,
+      horario_id = null,
+      fecha_reserva,
+      cantidad_personas,
+      notas = null,
+    } = req.body;
+
+    if (!mesa_id || !fecha_reserva || !cantidad_personas) {
+      return res.status(400).json({ message: 'Faltan datos obligatorios para crear reserva walk-in' });
+    }
+
+    await client.query('BEGIN');
+
+    const reservaQuery = `
+      INSERT INTO reservas (
+        cliente_id, mesa_id, horario_id, fecha_reserva, cantidad_personas, notas
+      ) VALUES (NULL, $1, $2, $3, $4, $5)
+      RETURNING *
+    `;
+
+    const reservaResult = await client.query(reservaQuery, [
+      mesa_id,
+      horario_id,
+      fecha_reserva,
+      cantidad_personas,
+      notas && notas.trim() !== '' ? notas : null,
+    ]);
+
+    await client.query('COMMIT');
+
+    return res.status(201).json({
+      success: true,
+      message: 'Reserva walk-in creada con éxito',
+      reserva: reservaResult.rows[0],
+    });
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    console.error('Error en createReservaWalkIn:', error);
+    return res.status(500).json({
+      error: 'Error interno del servidor',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  } finally {
+    client.release();
+  }
+};
+
+// Obtener todas las reservas con datos de cliente embebidos
 export const getReservas = async (_req: Request, res: Response) => {
   try {
     const result = await pool.query(`
       SELECT r.*, 
              c.nombre, c.apellido, c.telefono, c.correo_electronico 
       FROM reservas r
-      JOIN clientes c ON c.id = r.cliente_id
+      LEFT JOIN clientes c ON c.id = r.cliente_id
       ORDER BY r.fecha_reserva DESC, r.horario_id
     `);
 
@@ -147,7 +200,7 @@ export const getReservas = async (_req: Request, res: Response) => {
   }
 };
 
-// Obtener reservas por mesa y fecha (modificado para no devolver 404 si no hay reservas)
+// Obtener reservas por mesa y fecha (con LEFT JOIN)
 export const getReservaByMesa = async (req: Request, res: Response) => {
   const { mesaId } = req.params;
   const { fecha } = req.query;
@@ -165,12 +218,11 @@ export const getReservaByMesa = async (req: Request, res: Response) => {
       SELECT r.*, 
              c.nombre as cliente_nombre, c.apellido as cliente_apellido, c.telefono, c.correo_electronico 
       FROM reservas r
-      JOIN clientes c ON c.id = r.cliente_id
+      LEFT JOIN clientes c ON c.id = r.cliente_id
       WHERE r.mesa_id = $1 AND r.fecha_reserva = $2
       ORDER BY r.fecha_reserva DESC
     `, [mesaId, fecha]);
 
-    // Si no hay reservas, devolver arreglo vacío con éxito
     return res.json({
       success: true,
       reservas: result.rows,
@@ -183,15 +235,17 @@ export const getReservaByMesa = async (req: Request, res: Response) => {
   }
 };
 
-// Obtener reserva por ID
+// Obtener reserva por ID (LEFT JOIN para admitir walk-in sin cliente)
 export const getReservaById = async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
     const query = `
       SELECT r.*, 
-             c.nombre, c.apellido, c.telefono, c.correo_electronico 
+             c.id as cliente_id,
+             c.nombre, c.apellido, c.telefono, c.correo_electronico, c.es_frecuente, c.en_lista_negra,
+             c.notas as cliente_notas, c.tags, c.visitas, c.ultima_visita, c.gasto_total, c.gasto_por_visita
       FROM reservas r
-      JOIN clientes c ON c.id = r.cliente_id
+      LEFT JOIN clientes c ON c.id = r.cliente_id
       WHERE r.id = $1
     `;
     const { rows } = await pool.query(query, [id]);
@@ -200,9 +254,38 @@ export const getReservaById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Reserva no encontrada' });
     }
 
+    const row = rows[0];
+
+    const reserva = {
+      id: row.id,
+      cliente_id: row.cliente_id,
+      mesa_id: row.mesa_id,
+      fecha_reserva: row.fecha_reserva,
+      cantidad_personas: row.cantidad_personas,
+      notas: row.notas,
+      horario_id: row.horario_id,
+      cliente: row.cliente_id
+        ? {
+            id: row.cliente_id,
+            nombre: row.nombre,
+            apellido: row.apellido,
+            correo_electronico: row.correo_electronico,
+            telefono: row.telefono,
+            es_frecuente: row.es_frecuente,
+            en_lista_negra: row.en_lista_negra,
+            notas: row.cliente_notas,
+            tags: row.tags,
+            visitas: row.visitas,
+            ultima_visita: row.ultima_visita,
+            gasto_total: row.gasto_total,
+            gasto_por_visita: row.gasto_por_visita,
+          }
+        : null,
+    };
+
     return res.json({
       success: true,
-      reserva: rows[0],
+      reserva,
     });
   } catch (error) {
     console.error('Error en getReservaById:', error);

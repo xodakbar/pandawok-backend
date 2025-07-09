@@ -53,7 +53,7 @@ app.get('/', (req, res) => {
 // Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
-app.use('/api/clients', clientRoutes);
+app.use('/api/clientes', clientRoutes);
 app.use('/api/reservas', reservasRoutes);
 app.use('/api/waiting-list', waitingListRoutes);
 app.use('/api/mesas', mesasRoutes);     // ✅ Incluye rutas de mesas (get y put)

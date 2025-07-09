@@ -12,6 +12,9 @@ const router = express.Router();
 
 router.get('/', getAllClients);
 
+// Coloca primero la ruta específica antes de la dinámica
+router.get('/export/excel', exportClientsToExcel);
+
 router.get('/:id', getClientById);
 
 router.post('/', createClient);
@@ -19,7 +22,5 @@ router.post('/', createClient);
 router.put('/:id', updateClient);
 
 router.delete('/:id', deleteClient);
-
-router.get('/export/excel', exportClientsToExcel);
 
 export default router;
