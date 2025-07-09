@@ -23,6 +23,10 @@ router.post('/', (req, res, next) => {
   reservasController.createReserva(req, res).catch(next);
 });
 
+router.put('/:id', (req, res, next) => {
+  reservasController.updateReserva(req, res).catch(next);
+});
+
 // Crear reserva tipo walk-in (sin cliente)
 router.post('/walk-in', (req, res, next) => {
   reservasController.createReservaWalkIn(req, res).catch(next);

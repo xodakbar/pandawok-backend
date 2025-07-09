@@ -243,7 +243,7 @@ export const getReservaById = async (req: Request, res: Response) => {
       SELECT r.*, 
              c.id as cliente_id,
              c.nombre, c.apellido, c.telefono, c.correo_electronico, c.es_frecuente, c.en_lista_negra,
-             c.notas as cliente_notas
+             c.notas as cliente_notas, c.tags, c.visitas, c.ultima_visita, c.gasto_total, c.gasto_por_visita
       FROM reservas r
       LEFT JOIN clientes c ON c.id = r.cliente_id
       WHERE r.id = $1
@@ -274,6 +274,11 @@ export const getReservaById = async (req: Request, res: Response) => {
             es_frecuente: row.es_frecuente,
             en_lista_negra: row.en_lista_negra,
             notas: row.cliente_notas,
+            tags: row.tags,
+            visitas: row.visitas,
+            ultima_visita: row.ultima_visita,
+            gasto_total: row.gasto_total,
+            gasto_por_visita: row.gasto_por_visita,
           }
         : null,
     };
@@ -285,5 +290,124 @@ export const getReservaById = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error en getReservaById:', error);
     return res.status(500).json({ message: 'Error al obtener reserva' });
+  }
+};
+
+// Actualizar reserva por ID (con posible actualización de cliente)
+export const updateReserva = async (req: Request, res: Response) => {
+  const id = req.params.id;
+  const {
+    nombre,
+    apellido,
+    correo_electronico,
+    telefono,
+    mesa_id,
+    horario_id,
+    fecha_reserva,
+    cantidad_personas,
+    notas,
+  } = req.body;
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    if (nombre && apellido && correo_electronico && telefono) {
+      const clienteQuery = `
+        INSERT INTO clientes (nombre, apellido, correo_electronico, telefono, notas)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (correo_electronico) DO UPDATE SET
+          nombre = EXCLUDED.nombre,
+          apellido = EXCLUDED.apellido,
+          telefono = EXCLUDED.telefono,
+          notas = COALESCE(EXCLUDED.notas, clientes.notas),
+          fecha_actualizacion = CURRENT_TIMESTAMP
+        RETURNING id
+      `;
+      const clienteResult = await client.query(clienteQuery, [
+        nombre,
+        apellido,
+        correo_electronico,
+        telefono,
+        notas && notas.trim() !== '' ? notas : null,
+      ]);
+      const clienteId = clienteResult.rows[0].id;
+
+      const reservaUpdateQuery = `
+        UPDATE reservas SET
+          cliente_id = $1,
+          mesa_id = $2,
+          horario_id = $3,
+          fecha_reserva = $4,
+          cantidad_personas = $5,
+          notas = $6,
+          fecha_actualizacion = CURRENT_TIMESTAMP
+        WHERE id = $7
+        RETURNING *
+      `;
+      const reservaResult = await client.query(reservaUpdateQuery, [
+        clienteId,
+        mesa_id,
+        horario_id,
+        fecha_reserva,
+        cantidad_personas,
+        notas,
+        id,
+      ]);
+
+      await client.query('COMMIT');
+
+      if (reservaResult.rows.length === 0) {
+        return res.status(404).json({ message: 'Reserva no encontrada' });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Reserva actualizada con éxito',
+        reserva: reservaResult.rows[0],
+      });
+    } else {
+      const reservaUpdateQuery = `
+        UPDATE reservas SET
+          mesa_id = $1,
+          horario_id = $2,
+          fecha_reserva = $3,
+          cantidad_personas = $4,
+          notas = $5,
+          fecha_actualizacion = CURRENT_TIMESTAMP
+        WHERE id = $6
+        RETURNING *
+      `;
+      const reservaResult = await client.query(reservaUpdateQuery, [
+        mesa_id,
+        horario_id,
+        fecha_reserva,
+        cantidad_personas,
+        notas,
+        id,
+      ]);
+
+      await client.query('COMMIT');
+
+      if (reservaResult.rows.length === 0) {
+        return res.status(404).json({ message: 'Reserva no encontrada' });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Reserva actualizada con éxito',
+        reserva: reservaResult.rows[0],
+      });
+    }
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    console.error('Error en updateReserva:', error);
+    return res.status(500).json({
+      error: 'Error interno del servidor',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  } finally {
+    client.release();
   }
 };
