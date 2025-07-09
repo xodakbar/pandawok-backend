@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import pool from '../config/db';
+import moment from 'moment-timezone';
 
 export const crearBloqueoMesa = async (req: Request, res: Response, next: NextFunction) => {
   const { mesa_id, fecha, hora_inicio, hora_fin } = req.body;
@@ -17,6 +18,14 @@ export const crearBloqueoMesa = async (req: Request, res: Response, next: NextFu
     const mesaResult = await pool.query('SELECT id FROM mesas WHERE id = $1', [mesa_id]);
     if (mesaResult.rowCount === 0) {
       return res.status(404).json({ mensaje: 'Mesa no encontrada' });
+    }
+
+    // Validar que la fecha y hora de inicio no sean anteriores al momento actual en Chile
+    const nowChile = moment.tz('America/Santiago');
+    const bloqueoFechaHoraInicio = moment.tz(`${fecha}T${hora_inicio}`, 'YYYY-MM-DDTHH:mm', 'America/Santiago');
+
+    if (bloqueoFechaHoraInicio.isBefore(nowChile)) {
+      return res.status(400).json({ mensaje: 'No puedes bloquear una mesa en fecha y hora pasada.' });
     }
 
     // Insertar bloqueo
@@ -83,6 +92,24 @@ export const obtenerBloqueosPorMesaYFecha = async (req: Request, res: Response, 
     res.json({ bloqueos: result.rows });
   } catch (error) {
     console.error('Error obteniendo bloqueos por mesa y fecha:', error);
+    next(error);
+  }
+};
+
+export const desbloquearBloqueoMesa = async (req: Request, res: Response, next: NextFunction) => {
+  const bloqueoId = req.params.id;
+
+  try {
+    // Intentar borrar o actualizar el bloqueo para desbloquearlo
+    const result = await pool.query('DELETE FROM mesa_bloqueos WHERE id = $1 RETURNING *', [bloqueoId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ mensaje: 'Bloqueo no encontrado' });
+    }
+
+    res.json({ mensaje: 'Mesa desbloqueada correctamente', bloqueo: result.rows[0] });
+  } catch (error) {
+    console.error('Error en desbloquearBloqueoMesa:', error);
     next(error);
   }
 };

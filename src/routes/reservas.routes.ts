@@ -23,6 +23,7 @@ router.post('/', (req, res, next) => {
   reservasController.createReserva(req, res).catch(next);
 });
 
+// Actualizar reserva
 router.put('/:id', (req, res, next) => {
   reservasController.updateReserva(req, res).catch(next);
 });
@@ -30,6 +31,19 @@ router.put('/:id', (req, res, next) => {
 // Crear reserva tipo walk-in (sin cliente)
 router.post('/walk-in', (req, res, next) => {
   reservasController.createReservaWalkIn(req, res).catch(next);
+});
+
+// Marcar reserva como sentada
+router.post('/:id/sentar', (req, res, next) => {
+  reservasController.sentarReserva(req, res).catch(next);
+});
+
+router.delete('/:id', (req, res, next) => {
+  reservasController.deleteReserva(req, res).catch(next);
+});
+
+router.get('/cliente/:clienteId/historial', (req, res, next) => {
+  reservasController.getHistorialReservasPorCliente(req, res).catch(next);
 });
 
 export default router;

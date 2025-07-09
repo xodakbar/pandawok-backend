@@ -208,7 +208,6 @@ export const updateReserva = async (req: Request, res: Response) => {
 
     await client.query('BEGIN');
 
-    // Si clienteId es null, actualizamos reserva sin cliente (walk-in)
     const reservaUpdateQuery = `
       UPDATE reservas SET
         cliente_id = $1,
@@ -379,3 +378,110 @@ export const getReservaById = async (req: Request, res: Response) => {
     return res.status(500).json({ message: 'Error al obtener reserva' });
   }
 };
+
+// ** NUEVA FUNCIÓN: Marcar reserva como sentada **
+export const sentarReserva = async (req: Request, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: 'ID de reserva inválido' });
+    }
+
+    await client.query('BEGIN');
+
+    const updateQuery = `
+      UPDATE reservas 
+      SET status = $1 
+      WHERE id = $2
+      RETURNING *
+    `;
+
+    const statusSentado = 'sentado'; // Ajusta si usas otro valor para estado sentado
+
+    const result = await client.query(updateQuery, [statusSentado, id]);
+
+    if (result.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Reserva no encontrada' });
+    }
+
+    await client.query('COMMIT');
+
+    return res.json({
+      success: true,
+      message: 'Reserva marcada como sentada',
+      reserva: result.rows[0],
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error al sentar reserva:', error);
+    return res.status(500).json({ message: 'Error interno al sentar reserva' });
+  } finally {
+    client.release();
+  }
+};
+
+// Eliminar reserva por ID
+export const deleteReserva = async (req: Request, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: 'ID de reserva inválido' });
+    }
+
+    await client.query('BEGIN');
+
+    const result = await client.query('DELETE FROM reservas WHERE id = $1', [id]);
+
+    if (result.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Reserva no encontrada' });
+    }
+
+    await client.query('COMMIT');
+
+    return res.json({
+      success: true,
+      message: 'Reserva eliminada correctamente',
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error al eliminar reserva:', error);
+    return res.status(500).json({ message: 'Error interno al eliminar reserva' });
+  } finally {
+    client.release();
+  }
+};
+
+// Obtener historial de reservas por cliente
+export const getHistorialReservasPorCliente = async (req: Request, res: Response) => {
+  const clienteId = Number(req.params.clienteId);
+
+  if (isNaN(clienteId)) {
+    return res.status(400).json({ message: 'ID de cliente inválido' });
+  }
+
+  try {
+    const query = `
+      SELECT r.*, 
+             c.nombre, c.apellido, c.telefono, c.correo_electronico
+      FROM reservas r
+      LEFT JOIN clientes c ON c.id = r.cliente_id
+      WHERE r.cliente_id = $1
+      ORDER BY r.fecha_reserva DESC
+    `;
+
+    const { rows } = await pool.query(query, [clienteId]);
+
+    return res.json({
+      success: true,
+      historial: rows,
+    });
+  } catch (error) {
+    console.error('Error al obtener historial:', error);
+    return res.status(500).json({ message: 'Error interno al obtener historial' });
+  }
+};
+
