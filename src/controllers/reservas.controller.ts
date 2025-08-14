@@ -1,11 +1,16 @@
 import { Request, Response } from 'express';
 import pool from '../config/db';
+import { enviarCorreo } from '../correo/mail';
+import { QueryResult } from 'pg';
+import { v4 as uuidv4 } from 'uuid';
+
 
 const PG_UNIQUE_VIOLATION = '23505';
 const PG_FOREIGN_KEY_VIOLATION = '23503';
 const PG_INVALID_TEXT_REPRESENTATION = '22P02';
 
 // Crear reserva con cliente
+
 export const createReserva = async (req: Request, res: Response) => {
   const client = await pool.connect();
 
@@ -28,101 +33,106 @@ export const createReserva = async (req: Request, res: Response) => {
 
     await client.query('BEGIN');
 
+    // 1️⃣ Crear o actualizar cliente
     const clienteQuery = `
       INSERT INTO clientes (nombre, apellido, correo_electronico, telefono, notas)
       VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (correo_electronico) DO UPDATE SET
-        nombre = EXCLUDED.nombre,
-        apellido = EXCLUDED.apellido,
-        telefono = EXCLUDED.telefono,
-        notas = COALESCE(EXCLUDED.notas, clientes.notas),
-        fecha_actualizacion = CURRENT_TIMESTAMP
-      RETURNING id, en_lista_negra, es_frecuente
-    `;
-
-    const clienteResult = await client.query(clienteQuery, [
-      nombre,
-      apellido,
-      correo_electronico,
-      telefono,
-      notas && notas.trim() !== '' ? notas : null,
-    ]);
-
-    const cliente = clienteResult.rows[0];
-
-    if (cliente.en_lista_negra) {
-      await client.query('ROLLBACK');
-      return res.status(403).json({
-        error: 'Cliente en lista negra',
-        message: 'No se pueden realizar reservas para este cliente.',
-      });
-    }
-
-    const mesaId = (mesa_id === undefined || mesa_id === null || mesa_id === 'null') ? null : Number(mesa_id);
-    const horarioId = (horario_id === undefined || horario_id === null || horario_id === 'null') ? null : Number(horario_id);
-
-    const reservaQuery = `
-      INSERT INTO reservas (
-        cliente_id, mesa_id, horario_id,
-        fecha_reserva, cantidad_personas, notas
-      ) VALUES ($1, COALESCE($2, NULL::integer), COALESCE($3, NULL::integer), $4, $5, $6)
+      ON CONFLICT (correo_electronico)
+      DO UPDATE SET nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido, telefono = EXCLUDED.telefono
       RETURNING *
     `;
+    const clienteResult = await client.query(clienteQuery, [nombre, apellido, correo_electronico, telefono, notas]);
+    const cliente = clienteResult.rows[0];
 
+    // 2️⃣ Validación lista negra
+    if (cliente.en_lista_negra) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Cliente en lista negra' });
+    }
+
+    // 3️⃣ Validar duplicados (cliente, fecha, horario)
+    const duplicadoQuery = `
+      SELECT id FROM reservas
+      WHERE cliente_id = $1 AND fecha_reserva = $2 AND horario_id = $3
+    `;
+    const duplicadoResult: QueryResult<any> = await client.query(duplicadoQuery, [
+      cliente.id,
+      fecha_reserva,
+      horario_id,
+    ]);
+    if ((duplicadoResult.rowCount ?? 0) > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Ya existe una reserva para este cliente en esta fecha y horario' });
+    }
+
+    // 4️⃣ Crear reserva
+    const reservaQuery = `
+      INSERT INTO reservas (cliente_id, mesa_id, horario_id, fecha_reserva, cantidad_personas, notas, estado)
+      VALUES ($1, $2, $3, $4, $5, $6, 'pendiente')
+      RETURNING *
+    `;
     const reservaResult = await client.query(reservaQuery, [
       cliente.id,
-      mesaId,
-      horarioId,
+      mesa_id ?? null,
+      horario_id ?? null,
       fecha_reserva,
       cantidad_personas,
       notas && notas.trim() !== '' ? notas : null,
     ]);
+    const reserva = reservaResult.rows[0];
+
+    // 5️⃣ Generar tokens únicos
+    const confirmToken = uuidv4();
+    const cancelToken = uuidv4();
+
+    // 6️⃣ Crear tabla de tokens si no existe
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS reserva_tokens (
+        id SERIAL PRIMARY KEY,
+        reserva_id INT REFERENCES reservas(id),
+        tipo VARCHAR(20),
+        token VARCHAR(255)
+      )
+    `);
+
+    // 7️⃣ Guardar tokens
+    await client.query(
+      `INSERT INTO reserva_tokens (reserva_id, tipo, token) VALUES ($1, 'confirm', $2), ($1, 'cancel', $3)`,
+      [reserva.id, confirmToken, cancelToken]
+    );
 
     await client.query('COMMIT');
 
-    return res.status(201).json({
-      success: true,
-      message: 'Reserva creada con éxito',
-      reserva: reservaResult.rows[0],
-      cliente: {
-        id: cliente.id,
-        nombre,
-        apellido,
-        correo_electronico,
-        telefono,
-        es_frecuente: cliente.es_frecuente,
-      },
-    });
+    // 8️⃣ Construir links
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const confirmUrl = `${baseUrl}/confirmar-reserva/${confirmToken}`;
+    const cancelUrl = `${baseUrl}/confirmar-reserva/${cancelToken}`;
+
+
+    // 9️⃣ Enviar correo al cliente
+    const subject = 'Confirma tu reserva en PandaWok';
+    const html = `
+      <p>Hola ${nombre} ${apellido},</p>
+      <p>Tu reserva para el día ${new Date(fecha_reserva).toLocaleDateString()} está pendiente.</p>
+      <p>Por favor confirma o rechaza tu hora:</p>
+      <p>
+        <a href="${confirmUrl}" style="padding:10px 20px; background-color:#28a745; color:white; text-decoration:none; margin-right:10px;">Confirmar</a>
+        <a href="${cancelUrl}" style="padding:10px 20px; background-color:#dc3545; color:white; text-decoration:none;">Cancelar</a>
+      </p>
+      <p>Gracias,<br/>PandaWok</p>
+    `;
+    enviarCorreo(correo_electronico, subject, '', html).catch(console.error);
+
+    return res.status(201).json({ success: true, reserva, cliente });
   } catch (error: any) {
     await client.query('ROLLBACK');
     console.error('Error en createReserva:', error);
-
-    switch (error.code) {
-      case PG_UNIQUE_VIOLATION:
-        return res.status(409).json({
-          error: 'Conflicto de reserva',
-          message: 'Ya existe una reserva similar para este cliente.',
-        });
-
-      case PG_FOREIGN_KEY_VIOLATION:
-        return res.status(404).json({
-          error: 'Recurso no encontrado',
-          message: 'El cliente, mesa o horario no existe.',
-        });
-
-      case PG_INVALID_TEXT_REPRESENTATION:
-        return res.status(400).json({ error: 'Formato inválido en los datos' });
-
-      default:
-        return res.status(500).json({
-          error: 'Error interno del servidor',
-          message: process.env.NODE_ENV === 'development' ? error.message : undefined,
-        });
-    }
+    return res.status(500).json({ error: 'Error interno al crear reserva' });
   } finally {
     client.release();
   }
 };
+
 
 // Crear reserva sin cliente (Walk-in)
 export const createReservaWalkIn = async (req: Request, res: Response) => {
@@ -268,19 +278,78 @@ export const updateReserva = async (req: Request, res: Response) => {
 };
 
 // Obtener todas las reservas con datos de cliente embebidos
-export const getReservas = async (_req: Request, res: Response) => {
+
+export const getReservas = async (req: Request, res: Response) => {
   try {
-    const result = await pool.query(`
+    const { startDate, endDate, estado, cliente } = req.query;
+
+    const values: any[] = [];
+    let whereClauses: string[] = [];
+
+    // Filtro por rango de fechas
+    if (startDate && endDate) {
+      whereClauses.push(`r.fecha_reserva BETWEEN $${values.length + 1} AND $${values.length + 2}`);
+      values.push(startDate, endDate);
+    }
+
+    // Filtro por estado
+    if (estado) {
+      whereClauses.push(`r.estado ILIKE $${values.length + 1}`);
+      values.push(estado);
+    }
+
+    // Filtro por nombre/apellido/correo del cliente
+    if (cliente) {
+      whereClauses.push(`(
+        LOWER(c.nombre) ILIKE $${values.length + 1}
+        OR LOWER(c.apellido) ILIKE $${values.length + 1}
+        OR LOWER(c.correo_electronico) ILIKE $${values.length + 1}
+      )`);
+      values.push(`%${(cliente as string).toLowerCase()}%`);
+    }
+
+    const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const query = `
       SELECT r.*, 
-             c.nombre, c.apellido, c.telefono, c.correo_electronico 
+             c.id as cliente_id, c.nombre as cliente_nombre, c.apellido as cliente_apellido, 
+             c.telefono as cliente_telefono, c.correo_electronico as cliente_correo_electronico
       FROM reservas r
       LEFT JOIN clientes c ON c.id = r.cliente_id
+      ${whereSQL}
       ORDER BY r.fecha_reserva DESC, r.horario_id
-    `);
+    `;
+
+    const result = await pool.query(query, values);
+
+    // Mapear resultados para anidar cliente dentro de reserva
+    const reservas = result.rows.map(row => {
+      const {
+        cliente_id,
+        cliente_nombre,
+        cliente_apellido,
+        cliente_telefono,
+        cliente_correo_electronico,
+        ...reservaData
+      } = row;
+
+      return {
+        ...reservaData,
+        cliente: cliente_id
+          ? {
+              id: cliente_id,
+              nombre: cliente_nombre,
+              apellido: cliente_apellido,
+              telefono: cliente_telefono,
+              correo_electronico: cliente_correo_electronico,
+            }
+          : null,
+      };
+    });
 
     return res.json({
       success: true,
-      reservas: result.rows,
+      reservas,
     });
   } catch (error) {
     console.error('Error en getReservas:', error);
@@ -289,6 +358,7 @@ export const getReservas = async (_req: Request, res: Response) => {
     });
   }
 };
+
 
 // Obtener reservas por mesa y fecha (con LEFT JOIN)
 export const getReservaByMesa = async (req: Request, res: Response) => {
@@ -484,4 +554,144 @@ export const getHistorialReservasPorCliente = async (req: Request, res: Response
     return res.status(500).json({ message: 'Error interno al obtener historial' });
   }
 };
+
+
+export const actualizarEstadoReserva = async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const { estado } = req.body;
+
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'ID de reserva inválido' });
+    }
+
+    const estadosValidos = ['pendiente', 'confirmada', 'cancelada'];
+    if (!estado || !estadosValidos.includes(estado)) {
+      return res.status(400).json({ error: 'Estado inválido' });
+    }
+
+    const updateQuery = `
+      UPDATE reservas 
+      SET estado = $1, fecha_actualizacion = NOW() 
+      WHERE id = $2
+      RETURNING *
+    `;
+
+    const result = await pool.query(updateQuery, [estado, id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Reserva no encontrada' });
+    }
+
+    const reserva = result.rows[0];
+
+    // Obtener datos del cliente
+    const clienteQuery = 'SELECT nombre, apellido, correo_electronico FROM clientes WHERE id = $1';
+    const clienteResult = await pool.query(clienteQuery, [reserva.cliente_id]);
+
+    if (clienteResult.rowCount === 0) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
+    const cliente = clienteResult.rows[0];
+
+    if (!cliente.correo_electronico) {
+      console.warn(`Cliente ${cliente.nombre} ${cliente.apellido} no tiene correo electrónico válido.`);
+    } else {
+      const capitalizar = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+
+      const subject = `Estado de tu reserva #${reserva.id} actualizado`;
+      const text = `Hola ${cliente.nombre} ${cliente.apellido},
+
+Tu reserva para la fecha ${new Date(reserva.fecha_reserva).toLocaleDateString()} ha sido actualizada al estado: ${capitalizar(estado)}.
+
+Gracias por contactarnos.
+
+Saludos,
+PandaWok.`;
+
+      // Enviar correo sin bloquear la respuesta
+      enviarCorreo(cliente.correo_electronico, subject, text).catch((mailError) => {
+        console.error('Error enviando correo:', mailError);
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Estado actualizado y correo enviado (o pendiente si hubo error de envío)',
+      reserva,
+    });
+  } catch (error) {
+    console.error('Error al actualizar estado reserva:', error);
+    return res.status(500).json({ error: 'Error interno al actualizar estado' });
+  }
+};
+
+// responderReservaCliente.ts
+export const accionReserva = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+
+    // Buscar token en DB
+    const result = await pool.query(`
+      SELECT rt.tipo, r.id as reserva_id, r.fecha_reserva, r.cantidad_personas, r.mesa_id,
+             c.id as cliente_id, c.nombre, c.apellido, c.correo_electronico, c.telefono
+      FROM reserva_tokens rt
+      JOIN reservas r ON r.id = rt.reserva_id
+      JOIN clientes c ON c.id = r.cliente_id
+      WHERE rt.token = $1
+    `, [token]);
+
+    if (result.rowCount === 0) return res.status(404).send('Token inválido o expirado');
+
+    const {
+      tipo,
+      reserva_id,
+      fecha_reserva,
+      cantidad_personas,
+      mesa_id,
+      cliente_id,
+      nombre,
+      apellido,
+      correo_electronico,
+      telefono
+    } = result.rows[0];
+
+    // Enviar correo al admin
+    const subject = `Reserva ${tipo === 'confirm' ? 'confirmada' : 'cancelada'} por cliente`;
+    const text = `
+      El cliente ha ${tipo === 'confirm' ? 'confirmado' : 'cancelado'} su reserva.
+
+      Datos de la reserva:
+      - ID de reserva: ${reserva_id}
+      - Fecha: ${new Date(fecha_reserva).toLocaleDateString()}
+      - Cantidad de personas: ${cantidad_personas}
+      - Mesa: ${mesa_id}
+
+      Datos del cliente:
+      - ID: ${cliente_id}
+      - Nombre: ${nombre} ${apellido}
+      - Correo: ${correo_electronico}
+      - Teléfono: ${telefono}
+    `;
+    await enviarCorreo(process.env.EMAIL_USER!, subject, text);
+
+    // Respuesta al cliente
+    res.send(`
+      <p>Has ${tipo === 'confirm' ? 'confirmado' : 'cancelado'} tu reserva correctamente.</p>
+      <p>Gracias por contactarnos, ${nombre} ${apellido}.</p>
+    `);
+
+  } catch (error) {
+    console.error('Error en accionReserva:', error);
+    res.status(500).send('Error interno');
+  }
+};
+
+
+
+
+
+
+
 

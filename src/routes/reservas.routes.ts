@@ -38,12 +38,24 @@ router.post('/:id/sentar', (req, res, next) => {
   reservasController.sentarReserva(req, res).catch(next);
 });
 
+// Eliminar reserva
 router.delete('/:id', (req, res, next) => {
   reservasController.deleteReserva(req, res).catch(next);
 });
 
+// Historial de cliente
 router.get('/cliente/:clienteId/historial', (req, res, next) => {
   reservasController.getHistorialReservasPorCliente(req, res).catch(next);
+});
+
+// Actualizar estado de reserva (admin)
+router.post('/:id/estado', (req, res, next) => {
+  reservasController.actualizarEstadoReserva(req, res).catch(next);
+});
+
+// ✅ Acción de confirmación/cancelación por token (cliente)
+router.get('/accion/:token', (req, res, next) => {
+  reservasController.accionReserva(req, res).catch(next);
 });
 
 export default router;

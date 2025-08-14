@@ -9,13 +9,15 @@ import reservasRoutes from './routes/reservas.routes';
 import waitingListRoutes from './routes/WaitingList.Routes';
 import mesasRoutes from './routes/mesas.routes';
 import salonRoutes from './routes/salones.routes';
-import mesaBloqueosRoutes from './routes/mesaBloqueos.routes'; // <- Importa la nueva ruta
+import estadisticasRoutes from './routes/estadisticas.routes';
+import mesaBloqueosRoutes from './routes/mesaBloqueos.routes';
+import horarioRoutes from './routes/horario.routes';
+import tagsRoutes from './routes/tags.routes';  // <-- Importa rutas de tags
 
 import './config/db'; // conexión a la base de datos
 
 dotenv.config();
 
-// Logging de variables de entorno (útil para debugging)
 console.log('=== Variables de entorno al iniciar servidor ===');
 console.log('PORT:', process.env.PORT);
 console.log('DATABASE_URL:', process.env.DATABASE_URL);
@@ -25,7 +27,6 @@ console.log('===============================================');
 
 const app = express();
 
-// Lista blanca para CORS (dominios permitidos)
 const allowedOrigins = [
   'http://localhost:5173',
   'https://pandawok.netlify.app',
@@ -42,31 +43,32 @@ app.use(cors({
   credentials: true,
 }));
 
-// Middleware para parsear JSON del body
 app.use(express.json());
 
-// Ruta raíz para comprobar estado de la API
 app.get('/', (req, res) => {
   res.status(200).send('API está funcionando correctamente!');
 });
 
-// Rutas
+// Rutas existentes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/horarios', horarioRoutes);
 app.use('/api/clients', clientRoutes);
+app.use('/api/estadisticas', estadisticasRoutes);
 app.use('/api/reservas', reservasRoutes);
 app.use('/api/waiting-list', waitingListRoutes);
-app.use('/api/mesas', mesasRoutes);     // ✅ Incluye rutas de mesas (get y put)
-app.use('/api/salones', salonRoutes);   // ✅ Incluye rutas de salones
-app.use('/api/mesas/bloqueos', mesaBloqueosRoutes);// ✅ Nueva ruta para bloqueos de mesa
+app.use('/api/mesas', mesasRoutes);
+app.use('/api/salones', salonRoutes);
+app.use('/api/mesas/bloqueos', mesaBloqueosRoutes);
 
-// Middleware de manejo de errores (opcional pero recomendado)
+// Nueva ruta para tags
+app.use('/api/tags', tagsRoutes);
+
 app.use((err: any, req: any, res: any, next: any) => {
   console.error('Error capturado:', err);
   res.status(err.status || 500).json({ mensaje: err.message || 'Error interno del servidor' });
 });
 
-// Arranque del servidor
 const PORT = Number(process.env.PORT) || 8080;
 if (isNaN(PORT)) {
   console.error('ERROR: La variable de entorno PORT no es un número válido.');

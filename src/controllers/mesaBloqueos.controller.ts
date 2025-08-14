@@ -113,3 +113,19 @@ export const desbloquearBloqueoMesa = async (req: Request, res: Response, next: 
     next(error);
   }
 };
+
+export const obtenerTodosLosBloqueos = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM mesa_bloqueos ORDER BY fecha DESC, hora_inicio ASC'
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error al obtener todos los bloqueos:', error);
+    next(error);
+  }
+};
