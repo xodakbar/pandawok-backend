@@ -29,7 +29,7 @@ const app = express();
 
 const allowedOrigins = [
   'http://localhost:5173',
-  'https://pandawok.netlify.app',
+  'pandawok-reserve.netlify.app',
 ];
 
 app.use(cors({
