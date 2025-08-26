@@ -513,30 +513,50 @@ export const sentarReserva = async (req: Request, res: Response) => {
 export const deleteReserva = async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: 'ID de reserva inválido' });
-    }
-
     await client.query('BEGIN');
+    
+    // Primero eliminar los tokens asociados
+    await client.query(
+      'DELETE FROM reserva_tokens WHERE reserva_id = $1',
+      [req.params.id]
+    );
 
-    const result = await client.query('DELETE FROM reservas WHERE id = $1', [id]);
+    // Luego eliminar la reserva
+    const result = await client.query(
+      'DELETE FROM reservas WHERE id = $1 RETURNING *',
+      [req.params.id]
+    );
 
     if (result.rowCount === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Reserva no encontrada' });
     }
 
-    await client.query('COMMIT');
+    // Obtener las reservas actualizadas para la fecha de la reserva eliminada
+    const fecha = result.rows[0].fecha_reserva;
+    const reservasActualizadas = await client.query(`
+      SELECT r.*, 
+             CONCAT(h.hora_inicio, ' - ', h.hora_fin) as horario_descripcion,
+             m.numero_mesa, 
+             s.nombre as salon_nombre
+      FROM reservas r
+      LEFT JOIN horarios_disponibles h ON r.horario_id = h.id
+      LEFT JOIN mesas m ON r.mesa_id = m.id
+      LEFT JOIN salones s ON m.salon_id = s.id
+      WHERE r.fecha_reserva = $1
+      ORDER BY h.hora_inicio ASC
+    `, [fecha]);
 
-    return res.json({
-      success: true,
+    await client.query('COMMIT');
+    
+    res.json({ 
       message: 'Reserva eliminada correctamente',
+      reservas: reservasActualizadas.rows
     });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error al eliminar reserva:', error);
-    return res.status(500).json({ message: 'Error interno al eliminar reserva' });
+    res.status(500).json({ message: 'Error al eliminar la reserva' });
   } finally {
     client.release();
   }
