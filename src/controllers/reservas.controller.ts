@@ -187,6 +187,47 @@ export const createReservaWalkIn = async (req: Request, res: Response) => {
   }
 };
 
+
+//Muestra todas las mesas con reservas por fecha
+
+export const getReservasByDate = async (req: Request, res: Response) => {
+  const { fecha } = req.query;
+  console.log('Fecha recibida:', fecha);
+
+  if (!fecha || typeof fecha !== 'string') {
+    return res.status(400).json({ error: 'Parámetro fecha es obligatorio y debe ser string' });
+  }
+
+  try {
+    const query = `
+      SELECT r.*, 
+             c.nombre as cliente_nombre, 
+             c.apellido as cliente_apellido, 
+             c.telefono, 
+             c.correo_electronico
+      FROM reservas r
+      LEFT JOIN clientes c ON c.id = r.cliente_id
+      WHERE r.fecha_reserva = $1
+      ORDER BY r.fecha_reserva DESC
+    `;
+    
+    console.log('Ejecutando query con fecha:', fecha);
+    const result = await pool.query(query, [fecha]);
+    console.log('Número de reservas encontradas:', result.rows.length);
+
+    return res.json({
+      success: true,
+      reservas: result.rows,
+    });
+  } catch (error) {
+    console.error('Error detallado en getReservasByDate:', error);
+    return res.status(500).json({
+      error: 'Error interno al buscar reservas por fecha',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
 // Actualizar reserva (con cliente o sin cliente)
 export const updateReserva = async (req: Request, res: Response) => {
   const client = await pool.connect();

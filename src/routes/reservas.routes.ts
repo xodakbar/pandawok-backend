@@ -4,6 +4,11 @@ import * as reservasController from '../controllers/reservas.controller';
 const router = Router();
 
 // Obtener reservas por mesa y fecha
+
+router.get('/byDate', (req, res, next) => {
+  reservasController.getReservasByDate(req, res).catch(next);
+});
+
 router.get('/mesa/:mesaId', (req, res, next) => {
   reservasController.getReservaByMesa(req, res).catch(next);
 });
