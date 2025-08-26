@@ -5,7 +5,8 @@ import {
   createClient,
   updateClient,
   deleteClient,
-  exportClientsToExcel
+  exportClientsToExcel,
+  importClients
 } from '../controllers/clients.controller';
 
 const router = express.Router();
@@ -22,5 +23,8 @@ router.post('/', createClient);
 router.put('/:id', updateClient);
 
 router.delete('/:id', deleteClient);
+
+router.post('/import', importClients);
+
 
 export default router;

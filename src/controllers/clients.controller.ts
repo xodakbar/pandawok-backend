@@ -275,3 +275,95 @@ export const exportClientsToExcel = async (
     next(error);
   }
 };
+
+export const importClients = async (req: Request, res: Response) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const clients = req.body;
+    let insertedCount = 0;
+    let updatedCount = 0;
+    
+    for (const client_data of clients) {
+      // Verificar si el cliente ya existe (por correo o teléfono)
+      const existingClient = await client.query(
+        'SELECT id FROM clientes WHERE correo_electronico = $1 OR telefono = $2',
+        [client_data.correo_electronico, client_data.telefono]
+      );
+
+      if (existingClient.rows.length > 0) {
+        // Actualizar cliente existente
+        const id = existingClient.rows[0].id;
+        await client.query(
+          `UPDATE clientes 
+           SET nombre = $1, 
+               apellido = $2, 
+               correo_electronico = $3, 
+               telefono = $4,
+               visitas = $5, 
+               ultima_visita = $6, 
+               gasto_total = $7, 
+               gasto_por_visita = $8, 
+               notas = $9,
+               tags = $10,
+               fecha_actualizacion = NOW()
+           WHERE id = $11`,
+          [
+            client_data.nombre,
+            client_data.apellido,
+            client_data.correo_electronico,
+            client_data.telefono,
+            client_data.visitas || 0,
+            client_data.ultima_visita,
+            client_data.gasto_total || 0,
+            client_data.gasto_por_visita || 0,
+            client_data.notas || '',
+            client_data.tags || [],
+            id
+          ]
+        );
+        updatedCount++;
+      } else {
+        // Insertar nuevo cliente
+        const result = await client.query(
+          `INSERT INTO clientes 
+           (nombre, apellido, correo_electronico, telefono, 
+            visitas, ultima_visita, gasto_total, gasto_por_visita, 
+            notas, tags, fecha_creacion, fecha_actualizacion)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+           RETURNING id`,
+          [
+            client_data.nombre,
+            client_data.apellido,
+            client_data.correo_electronico,
+            client_data.telefono,
+            client_data.visitas || 0,
+            client_data.ultima_visita,
+            client_data.gasto_total || 0,
+            client_data.gasto_por_visita || 0,
+            client_data.notas || '',
+            client_data.tags || []
+          ]
+        );
+        insertedCount++;
+      }
+    }
+
+    await client.query('COMMIT');
+    
+    res.json({
+      success: true,
+      message: `Importación exitosa: ${insertedCount} clientes nuevos, ${updatedCount} actualizados`
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error en importación:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error en la importación: ' + (error as Error).message
+    });
+  } finally {
+    client.release();
+  }
+};
