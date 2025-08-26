@@ -10,7 +10,7 @@ router.get('/byDate', (req, res, next) => {
 });
 
 router.get('/mesa/:mesaId', (req, res, next) => {
-  reservasController.getReservaByMesa(req, res).catch(next);
+  reservasController.getReservasByMesa(req, res).catch(next);
 });
 
 // Obtener reserva por ID

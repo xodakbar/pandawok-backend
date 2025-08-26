@@ -134,6 +134,29 @@ export const createReserva = async (req: Request, res: Response) => {
 };
 
 
+export const getReservasByDate = async (req: Request, res: Response) => {
+  try {
+    const { fecha } = req.query;
+    const query = `
+      SELECT r.*, 
+             CONCAT(h.hora_inicio, ' - ', h.hora_fin) as horario_descripcion,
+             m.numero_mesa, 
+             s.nombre as salon_nombre
+      FROM reservas r
+      LEFT JOIN horarios_disponibles h ON r.horario_id = h.id
+      LEFT JOIN mesas m ON r.mesa_id = m.id
+      LEFT JOIN salones s ON m.salon_id = s.id
+      WHERE r.fecha_reserva = $1
+      ORDER BY h.hora_inicio ASC
+    `;
+    const result = await pool.query(query, [fecha]);
+    res.json({ reservas: result.rows });
+  } catch (error) {
+    console.error('Error en getReservasByDate:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
 // Crear reserva sin cliente (Walk-in)
 export const createReservaWalkIn = async (req: Request, res: Response) => {
   const client = await pool.connect();
@@ -190,43 +213,7 @@ export const createReservaWalkIn = async (req: Request, res: Response) => {
 
 //Muestra todas las mesas con reservas por fecha
 
-export const getReservasByDate = async (req: Request, res: Response) => {
-  const { fecha } = req.query;
-  console.log('Fecha recibida:', fecha);
-
-  if (!fecha || typeof fecha !== 'string') {
-    return res.status(400).json({ error: 'Parámetro fecha es obligatorio y debe ser string' });
-  }
-
-  try {
-    const query = `
-      SELECT r.*, 
-             c.nombre as cliente_nombre, 
-             c.apellido as cliente_apellido, 
-             c.telefono, 
-             c.correo_electronico
-      FROM reservas r
-      LEFT JOIN clientes c ON c.id = r.cliente_id
-      WHERE r.fecha_reserva = $1
-      ORDER BY r.fecha_reserva DESC
-    `;
-    
-    console.log('Ejecutando query con fecha:', fecha);
-    const result = await pool.query(query, [fecha]);
-    console.log('Número de reservas encontradas:', result.rows.length);
-
-    return res.json({
-      success: true,
-      reservas: result.rows,
-    });
-  } catch (error) {
-    console.error('Error detallado en getReservasByDate:', error);
-    return res.status(500).json({
-      error: 'Error interno al buscar reservas por fecha',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-};
+;
 
 // Actualizar reserva (con cliente o sin cliente)
 export const updateReserva = async (req: Request, res: Response) => {
@@ -402,37 +389,26 @@ export const getReservas = async (req: Request, res: Response) => {
 
 
 // Obtener reservas por mesa y fecha (con LEFT JOIN)
-export const getReservaByMesa = async (req: Request, res: Response) => {
-  const { mesaId } = req.params;
-  const { fecha } = req.query;
-
-  if (!mesaId || isNaN(Number(mesaId))) {
-    return res.status(400).json({ error: 'ID de mesa inválido' });
-  }
-
-  if (!fecha || typeof fecha !== 'string') {
-    return res.status(400).json({ error: 'Parámetro fecha es obligatorio y debe ser string' });
-  }
-
+export const getReservasByMesa = async (req: Request, res: Response) => {
   try {
-    const result = await pool.query(`
+    const { mesa_id, fecha } = req.query;
+    const query = `
       SELECT r.*, 
-             c.nombre as cliente_nombre, c.apellido as cliente_apellido, c.telefono, c.correo_electronico 
+             CONCAT(h.hora_inicio, ' - ', h.hora_fin) as horario_descripcion,
+             m.numero_mesa, 
+             s.nombre as salon_nombre
       FROM reservas r
-      LEFT JOIN clientes c ON c.id = r.cliente_id
+      LEFT JOIN horarios_disponibles h ON r.horario_id = h.id
+      LEFT JOIN mesas m ON r.mesa_id = m.id
+      LEFT JOIN salones s ON m.salon_id = s.id
       WHERE r.mesa_id = $1 AND r.fecha_reserva = $2
-      ORDER BY r.fecha_reserva DESC
-    `, [mesaId, fecha]);
-
-    return res.json({
-      success: true,
-      reservas: result.rows,
-    });
+      ORDER BY h.hora_inicio ASC
+    `;
+    const result = await pool.query(query, [mesa_id, fecha]);
+    res.json({ reservas: result.rows });
   } catch (error) {
-    console.error('Error en getReservaByMesa:', error);
-    return res.status(500).json({
-      error: 'Error interno al buscar la reserva',
-    });
+    console.error('Error en getReservasByMesa:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
 
