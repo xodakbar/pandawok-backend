@@ -317,7 +317,12 @@ export const updateReserva = async (req: Request, res: Response) => {
 
 export const getReservas = async (req: Request, res: Response) => {
   try {
-    const { startDate, endDate, estado, cliente } = req.query;
+    const { startDate, endDate, estado, cliente, page = '1', limit = '20' } = req.query;
+
+    // Paginación básica
+    const pageNumber = Math.max(parseInt(page as string, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(limit as string, 10) || 20, 1), 100); // límite duro 100
+    const offset = (pageNumber - 1) * pageSize;
 
     const values: any[] = [];
     let whereClauses: string[] = [];
@@ -354,9 +359,19 @@ export const getReservas = async (req: Request, res: Response) => {
       LEFT JOIN clientes c ON c.id = r.cliente_id
       ${whereSQL}
       ORDER BY r.fecha_reserva DESC, r.horario_id
+      LIMIT $${values.length + 1} OFFSET $${values.length + 2}
     `;
 
-    const result = await pool.query(query, values);
+    const countQuery = `
+      SELECT COUNT(*)::int AS total
+      FROM reservas r
+      LEFT JOIN clientes c ON c.id = r.cliente_id
+      ${whereSQL}
+    `;
+
+    const resultPromise = pool.query(query, [...values, pageSize, offset]);
+    const countPromise = pool.query(countQuery, values);
+    const [result, countResult] = await Promise.all([resultPromise, countPromise]);
 
     // Mapear resultados para anidar cliente dentro de reserva
     const reservas = result.rows.map(row => {
@@ -383,9 +398,20 @@ export const getReservas = async (req: Request, res: Response) => {
       };
     });
 
+    const total = countResult.rows[0]?.total || 0;
+    const totalPages = Math.ceil(total / pageSize);
+
     return res.json({
       success: true,
       reservas,
+      pagination: {
+        page: pageNumber,
+        limit: pageSize,
+        total,
+        totalPages,
+        hasNextPage: pageNumber < totalPages,
+        hasPrevPage: pageNumber > 1,
+      }
     });
   } catch (error) {
     console.error('Error en getReservas:', error);
