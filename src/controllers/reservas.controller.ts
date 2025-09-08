@@ -141,16 +141,24 @@ export const getReservasByDate = async (req: Request, res: Response) => {
       SELECT r.*, 
              CONCAT(h.hora_inicio, ' - ', h.hora_fin) as horario_descripcion,
              m.numero_mesa, 
-             s.nombre as salon_nombre
+             s.nombre as salon_nombre,
+             c.nombre as cliente_nombre,
+             c.apellido as cliente_apellido,
+             c.id as cliente_id
       FROM reservas r
+      LEFT JOIN clientes c ON r.cliente_id = c.id
       LEFT JOIN horarios_disponibles h ON r.horario_id = h.id
       LEFT JOIN mesas m ON r.mesa_id = m.id
       LEFT JOIN salones s ON m.salon_id = s.id
       WHERE r.fecha_reserva = $1
-      ORDER BY h.hora_inicio ASC
+      ORDER BY h.hora_inicio ASC NULLS LAST, r.id ASC
     `;
     const result = await pool.query(query, [fecha]);
-    res.json({ reservas: result.rows });
+    res.json({ reservas: result.rows.map(r => ({
+      ...r,
+      cliente_nombre: r.cliente_nombre || null,
+      cliente_apellido: r.cliente_apellido || null,
+    })) });
   } catch (error) {
     console.error('Error en getReservasByDate:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
