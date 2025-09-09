@@ -236,6 +236,10 @@ export const updateReserva = async (req: Request, res: Response) => {
 
     const {
       cliente_id,
+      nombre,
+      apellido,
+      correo_electronico,
+      telefono,
       mesa_id,
       horario_id,
       fecha_reserva,
@@ -247,12 +251,26 @@ export const updateReserva = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Faltan datos obligatorios para actualizar reserva' });
     }
 
+    await client.query('BEGIN');
+
+    let clienteId = cliente_id;
+
+    // Si no hay cliente_id, crear o actualizar cliente
+    if (!clienteId && nombre && apellido && correo_electronico && telefono) {
+      const clienteQuery = `
+        INSERT INTO clientes (nombre, apellido, correo_electronico, telefono, notas)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (correo_electronico)
+        DO UPDATE SET nombre = EXCLUDED.nombre, apellido = EXCLUDED.apellido, telefono = EXCLUDED.telefono
+        RETURNING id
+      `;
+      const clienteResult = await client.query(clienteQuery, [nombre, apellido, correo_electronico, telefono, notas]);
+      clienteId = clienteResult.rows[0].id;
+    }
+
     // Convertir strings 'null' o undefined a null
-    const clienteId = (cliente_id === undefined || cliente_id === null || cliente_id === 'null') ? null : Number(cliente_id);
     const mesaId = (mesa_id === undefined || mesa_id === null || mesa_id === 'null') ? null : Number(mesa_id);
     const horarioId = (horario_id === undefined || horario_id === null || horario_id === 'null') ? null : Number(horario_id);
-
-    await client.query('BEGIN');
 
     const reservaUpdateQuery = `
       UPDATE reservas SET
@@ -354,7 +372,7 @@ export const getReservas = async (req: Request, res: Response) => {
     const query = `
       SELECT r.*, 
              c.id as cliente_id, c.nombre as cliente_nombre, c.apellido as cliente_apellido, 
-             c.telefono as cliente_telefono, c.correo_electronico as cliente_correo_electronico
+             c.telefono as cliente_telefono, c.correo_electronico as cliente_correo_electronico, r.horario_id
       FROM reservas r
       LEFT JOIN clientes c ON c.id = r.cliente_id
       ${whereSQL}
