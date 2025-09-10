@@ -276,25 +276,34 @@ export const exportClientsToExcel = async (
   }
 };
 
+// ...existing code...
+
 export const importClients = async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
     const clients = req.body;
+    console.log('Starting import with', clients.length, 'clients');
+
     let insertedCount = 0;
     let updatedCount = 0;
     
     for (const client_data of clients) {
+      console.log('Processing client:', client_data.nombre, client_data.apellido, 'Correo:', client_data.correo_electronico);
+
       // Verificar si el cliente ya existe (por correo o teléfono)
       const existingClient = await client.query(
         'SELECT id FROM clientes WHERE correo_electronico = $1 OR telefono = $2',
         [client_data.correo_electronico, client_data.telefono]
       );
 
+      console.log('Existing client check result:', existingClient.rows.length > 0 ? 'Found' : 'Not found');
+
       if (existingClient.rows.length > 0) {
         // Actualizar cliente existente
         const id = existingClient.rows[0].id;
+        console.log('Updating client ID:', id);
         await client.query(
           `UPDATE clientes 
            SET nombre = $1, 
@@ -307,8 +316,9 @@ export const importClients = async (req: Request, res: Response) => {
                gasto_por_visita = $8, 
                notas = $9,
                tags = $10,
+               fecha_creacion = $11,
                fecha_actualizacion = NOW()
-           WHERE id = $11`,
+           WHERE id = $12`,
           [
             client_data.nombre,
             client_data.apellido,
@@ -320,18 +330,22 @@ export const importClients = async (req: Request, res: Response) => {
             client_data.gasto_por_visita || 0,
             client_data.notas || '',
             client_data.tags || [],
+            client_data.fecha_creacion,
             id
           ]
         );
         updatedCount++;
+        console.log('Updated client successfully');
       } else {
         // Insertar nuevo cliente
+        console.log('Inserting new client');
         const result = await client.query(
           `INSERT INTO clientes 
-           (nombre, apellido, correo_electronico, telefono, 
-            visitas, ultima_visita, gasto_total, gasto_por_visita, 
-            notas, tags, fecha_creacion, fecha_actualizacion)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+           (nombre, apellido, correo_electronico, telefono,
+            visitas, ultima_visita, tags,
+            gasto_total, gasto_por_visita,
+            notas, fecha_creacion, fecha_actualizacion)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
            RETURNING id`,
           [
             client_data.nombre,
@@ -340,17 +354,20 @@ export const importClients = async (req: Request, res: Response) => {
             client_data.telefono,
             client_data.visitas || 0,
             client_data.ultima_visita,
+            client_data.tags || [],
             client_data.gasto_total || 0,
             client_data.gasto_por_visita || 0,
             client_data.notas || '',
-            client_data.tags || []
+            client_data.fecha_creacion
           ]
         );
         insertedCount++;
+        console.log('Inserted new client with ID:', result.rows[0].id);
       }
     }
 
     await client.query('COMMIT');
+    console.log('Import completed successfully. Inserted:', insertedCount, 'Updated:', updatedCount);
     
     res.json({
       success: true,
@@ -367,3 +384,5 @@ export const importClients = async (req: Request, res: Response) => {
     client.release();
   }
 };
+
+// ...existing code...
