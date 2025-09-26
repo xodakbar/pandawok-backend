@@ -759,6 +759,116 @@ export const accionReserva = async (req: Request, res: Response) => {
   }
 };
 
+// Función específica para buscar reservas en la página de confirmar reservas
+export const buscarReservasParaConfirmar = async (req: Request, res: Response) => {
+  try {
+    const { search, estado, fecha, page = '1', limit = '50' } = req.query;
+
+    const pageNumber = Math.max(parseInt(page as string, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(limit as string, 10) || 50, 1), 100);
+    const offset = (pageNumber - 1) * pageSize;
+
+    const values: any[] = [];
+    let whereClauses: string[] = [];
+
+    // Filtro por búsqueda de texto (nombre, apellido, correo, ID)
+    if (search && (search as string).trim()) {
+      const searchTerm = (search as string).trim();
+      whereClauses.push(`(
+        LOWER(c.nombre) ILIKE $${values.length + 1}
+        OR LOWER(c.apellido) ILIKE $${values.length + 1}
+        OR LOWER(c.correo_electronico) ILIKE $${values.length + 1}
+        OR r.id::text ILIKE $${values.length + 1}
+      )`);
+      values.push(`%${searchTerm.toLowerCase()}%`);
+    }
+
+    // Filtro por estado
+    if (estado && estado !== 'todos') {
+      whereClauses.push(`LOWER(r.estado) = $${values.length + 1}`);
+      values.push((estado as string).toLowerCase());
+    }
+
+    // Filtro por fecha específica
+    if (fecha) {
+      whereClauses.push(`DATE(r.fecha_reserva) = $${values.length + 1}`);
+      values.push(fecha);
+    }
+
+    const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const query = `
+      SELECT r.*, 
+             c.id as cliente_id, 
+             c.nombre as cliente_nombre, 
+             c.apellido as cliente_apellido, 
+             c.correo_electronico as cliente_correo_electronico,
+             c.telefono as cliente_telefono
+      FROM reservas r
+      LEFT JOIN clientes c ON c.id = r.cliente_id
+      ${whereSQL}
+      ORDER BY r.fecha_reserva DESC, r.id DESC
+      LIMIT $${values.length + 1} OFFSET $${values.length + 2}
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*)::int AS total
+      FROM reservas r
+      LEFT JOIN clientes c ON c.id = r.cliente_id
+      ${whereSQL}
+    `;
+
+    const resultPromise = pool.query(query, [...values, pageSize, offset]);
+    const countPromise = pool.query(countQuery, values);
+    const [result, countResult] = await Promise.all([resultPromise, countPromise]);
+
+    // Mapear resultados para anidar cliente dentro de reserva
+    const reservas = result.rows.map(row => {
+      const {
+        cliente_id,
+        cliente_nombre,
+        cliente_apellido,
+        cliente_correo_electronico,
+        cliente_telefono,
+        ...reservaData
+      } = row;
+
+      return {
+        ...reservaData,
+        cliente: cliente_id
+          ? {
+              nombre: cliente_nombre,
+              apellido: cliente_apellido,
+              correo_electronico: cliente_correo_electronico,
+              telefono: cliente_telefono,
+            }
+          : null,
+      };
+    });
+
+    const total = countResult.rows[0]?.total || 0;
+    const totalPages = Math.ceil(total / pageSize);
+
+    return res.json({
+      success: true,
+      reservas,
+      pagination: {
+        page: pageNumber,
+        limit: pageSize,
+        total,
+        totalPages,
+        hasNextPage: pageNumber < totalPages,
+        hasPrevPage: pageNumber > 1,
+      }
+    });
+  } catch (error) {
+    console.error('Error en buscarReservasParaConfirmar:', error);
+    return res.status(500).json({
+      error: 'Error interno al buscar reservas',
+    });
+  }
+};
+
 
 
 

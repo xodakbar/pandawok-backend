@@ -4,13 +4,17 @@ import * as reservasController from '../controllers/reservas.controller';
 const router = Router();
 
 // Obtener reservas por mesa y fecha
-
 router.get('/byDate', (req, res, next) => {
   reservasController.getReservasByDate(req, res).catch(next);
 });
 
 router.get('/mesa/:mesaId', (req, res, next) => {
   reservasController.getReservasByMesa(req, res).catch(next);
+});
+
+// Búsqueda específica para confirmar reservas
+router.get('/buscar/confirmar', (req, res, next) => {
+  reservasController.buscarReservasParaConfirmar(req, res).catch(next);
 });
 
 // Obtener reserva por ID
@@ -58,7 +62,7 @@ router.post('/:id/estado', (req, res, next) => {
   reservasController.actualizarEstadoReserva(req, res).catch(next);
 });
 
-// ✅ Acción de confirmación/cancelación por token (cliente)
+// Responder acción (confirmar/cancelar) desde correo del cliente
 router.get('/accion/:token', (req, res, next) => {
   reservasController.accionReserva(req, res).catch(next);
 });
