@@ -6,7 +6,8 @@ import {
   updateClient,
   deleteClient,
   exportClientsToExcel,
-  importClients
+  importClients,
+  buscarClientes
 } from '../controllers/clients.controller';
 
 const router = express.Router();
@@ -15,6 +16,7 @@ router.get('/', getAllClients);
 
 // Coloca primero la ruta específica antes de la dinámica
 router.get('/export/excel', exportClientsToExcel);
+router.get('/buscar', buscarClientes);
 
 router.get('/:id', getClientById);
 

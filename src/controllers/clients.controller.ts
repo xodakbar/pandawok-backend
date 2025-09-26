@@ -385,4 +385,94 @@ export const importClients = async (req: Request, res: Response) => {
   }
 };
 
+export const buscarClientes = async (
+  req: Request,
+  res: Response<ApiResponse<Client[]>>,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { 
+      busqueda, 
+      es_frecuente, 
+      en_lista_negra, 
+      nivel_membresia,
+      page = 1, 
+      limit = 20 
+    } = req.query;
+
+    let query = `
+      SELECT * FROM clientes
+      WHERE 1=1
+    `;
+    
+    const queryParams: any[] = [];
+    let paramIndex = 1;
+
+    // Filtro de búsqueda por texto (nombre, apellido, correo, teléfono)
+    if (busqueda && typeof busqueda === 'string' && busqueda.trim()) {
+      query += ` AND (
+        LOWER(nombre) LIKE LOWER($${paramIndex}) OR 
+        LOWER(apellido) LIKE LOWER($${paramIndex}) OR 
+        LOWER(correo_electronico) LIKE LOWER($${paramIndex}) OR 
+        telefono LIKE $${paramIndex}
+      )`;
+      queryParams.push(`%${busqueda.trim()}%`);
+      paramIndex++;
+    }
+
+    // Filtro por cliente frecuente
+    if (es_frecuente !== undefined) {
+      query += ` AND es_frecuente = $${paramIndex}`;
+      queryParams.push(es_frecuente === 'true');
+      paramIndex++;
+    }
+
+    // Filtro por lista negra
+    if (en_lista_negra !== undefined) {
+      query += ` AND en_lista_negra = $${paramIndex}`;
+      queryParams.push(en_lista_negra === 'true');
+      paramIndex++;
+    }
+
+    // Filtro por nivel de membresía
+    if (nivel_membresia && typeof nivel_membresia === 'string') {
+      query += ` AND LOWER(nivel_membresia) = LOWER($${paramIndex})`;
+      queryParams.push(nivel_membresia);
+      paramIndex++;
+    }
+
+    // Contar el total de resultados antes de aplicar paginación
+    const countQuery = query.replace('SELECT *', 'SELECT COUNT(*)');
+    const countResult = await pool.query(countQuery, queryParams);
+    const totalCount = parseInt(countResult.rows[0].count);
+
+    // Agregar ordenamiento y paginación
+    query += ` ORDER BY nombre, apellido`;
+    
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const offset = (pageNum - 1) * limitNum;
+    
+    query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    queryParams.push(limitNum, offset);
+
+    const result = await pool.query<Client>(query, queryParams);
+
+    const totalPages = Math.ceil(totalCount / limitNum);
+
+    res.status(200).json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        totalPages: totalPages,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ...existing code...
