@@ -9,8 +9,7 @@ import {
 const router = Router();
 
 // Obtener todas las mesas activas de un salón
-router.get('/salon/:id/mesas', getMesasPorSalon);
-
+router.get('/salon/:salon_id/mesas', getMesasPorSalon);
 // Actualizar posición de una mesa
 router.put('/:id/posicion', actualizarPosicionMesa);
 

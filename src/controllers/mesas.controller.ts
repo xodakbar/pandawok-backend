@@ -3,14 +3,16 @@ import pool from '../config/db';
 
 // Obtener mesas activas de un salón (con posiciones incluidas)
 export const getMesasPorSalon = async (req: Request, res: Response): Promise<void> => {
-  const salonId = Number(req.params.id);
-
-  if (isNaN(salonId)) {
-    res.status(400).json({ message: 'ID de salón inválido' });
-    return;
-  }
-
   try {
+    const { salon_id } = req.params;
+    const salonId = Number(salon_id);
+
+    if (isNaN(salonId)) {
+      res.status(400).json({ message: 'ID de salón inválido' });
+      return;
+    }
+
+    // CAMBIO: Evitar el CAST problemático, usar ORDER BY simple
     const query = `
       SELECT 
         id, 
@@ -24,7 +26,7 @@ export const getMesasPorSalon = async (req: Request, res: Response): Promise<voi
         posy AS "posY"
       FROM mesas
       WHERE salon_id = $1 AND esta_activa = true
-      ORDER BY CAST(numero_mesa AS INTEGER)
+      ORDER BY numero_mesa
     `;
 
     const { rows } = await pool.query(query, [salonId]);
@@ -32,7 +34,10 @@ export const getMesasPorSalon = async (req: Request, res: Response): Promise<voi
     res.json(rows);
   } catch (error) {
     console.error('Error obteniendo mesas:', error);
-    res.status(500).json({ message: 'Error interno del servidor' });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error interno del servidor' 
+    });
   }
 };
 
