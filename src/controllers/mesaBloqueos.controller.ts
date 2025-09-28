@@ -75,26 +75,61 @@ export const obtenerBloqueosPorSalonYFecha = async (req: Request, res: Response,
   }
 };
 
-export const obtenerBloqueosPorMesaYFecha = async (req: Request, res: Response, next: NextFunction) => {
-  const mesaId = Number(req.params.mesaId);
-  const fecha = req.query.fecha as string;
 
-  if (isNaN(mesaId) || !fecha) {
-    return res.status(400).json({ mensaje: 'Parámetros inválidos: mesaId y fecha son obligatorios' });
-  }
-
+export const obtenerBloqueosPorMesaYFecha = async (req: Request, res: Response, next?: NextFunction) => {
   try {
-    const result = await pool.query(
-      `SELECT * FROM mesa_bloqueos WHERE mesa_id = $1 AND fecha = $2`,
-      [mesaId, fecha]
-    );
+    const { mesaId } = req.params;
+    const { fecha } = req.query;
 
-    res.json({ bloqueos: result.rows });
+    // Log detallado de la petición
+    console.log('=== CONSULTA BLOQUEOS POR MESA ===');
+    console.log('Mesa ID:', mesaId);
+    console.log('Fecha solicitada:', fecha);
+    console.log('Query completo:', req.query);
+    console.log('Params completo:', req.params);
+    console.log('Timestamp:', new Date().toISOString());
+
+    if (!fecha) {
+      console.log('❌ Error: Fecha no proporcionada para bloqueos');
+      return res.status(400).json({
+        success: false,
+        message: 'La fecha es requerida'
+      });
+    }
+
+    const query = `
+      SELECT * FROM mesa_bloqueos 
+      WHERE mesa_id = $1 AND DATE(fecha) = $2
+      ORDER BY hora_inicio ASC
+    `;
+
+    console.log('🔒 Ejecutando query SQL para bloqueos:', query);
+    console.log('🔒 Parámetros:', [mesaId, fecha]);
+
+    const result = await pool.query(query, [mesaId, fecha]);
+    const bloqueos = result.rows as any[];
+
+    console.log('✅ Bloqueos encontrados:', bloqueos.length);
+    if (bloqueos.length > 0) {
+      console.log('🔒 Primer bloqueo como ejemplo:', JSON.stringify(bloqueos[0], null, 2));
+    }
+
+    res.json({
+      success: true,
+      bloqueos: bloqueos
+    });
+
   } catch (error) {
-    console.error('Error obteniendo bloqueos por mesa y fecha:', error);
-    next(error);
+    console.error('💥 Error en obtenerBloqueosPorMesaYFecha:', error);
+    console.error('💥 Stack trace:', (error as Error).stack);
+    res.status(500).json({
+      success: false,
+      message: 'Error interno del servidor',
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    });
   }
 };
+
 
 export const desbloquearBloqueoMesa = async (req: Request, res: Response, next: NextFunction) => {
   const bloqueoId = req.params.id;

@@ -422,30 +422,78 @@ export const getReservas = async (req: Request, res: Response) => {
 };
 
 
-// Obtener reservas por mesa y fecha (con LEFT JOIN)
+
+
+// ...existing code...
+
 export const getReservasByMesa = async (req: Request, res: Response) => {
   try {
-    const { mesa_id, fecha } = req.query;
+    const { mesaId } = req.params;
+    const { fecha } = req.query;
+
+    // Log detallado de la petición
+    console.log('=== CONSULTA RESERVAS POR MESA ===');
+    console.log('Mesa ID:', mesaId);
+    console.log('Fecha solicitada:', fecha);
+    console.log('Query completo:', req.query);
+    console.log('Params completo:', req.params);
+    console.log('Timestamp:', new Date().toISOString());
+
+    if (!fecha) {
+      console.log('❌ Error: Fecha no proporcionada');
+      return res.status(400).json({
+        success: false,
+        message: 'La fecha es requerida'
+      });
+    }
+
     const query = `
-      SELECT r.*, 
-             CONCAT(h.hora_inicio, ' - ', h.hora_fin) as horario_descripcion,
-             m.numero_mesa, 
-             s.nombre as salon_nombre
+      SELECT 
+        r.*,
+        c.nombre as cliente_nombre,
+        c.apellido as cliente_apellido,
+        CONCAT(h.hora_inicio, ' - ', h.hora_fin) as horario_descripcion,
+        m.numero_mesa,
+        s.nombre as salon_nombre
       FROM reservas r
+      LEFT JOIN clientes c ON r.cliente_id = c.id
       LEFT JOIN horarios_disponibles h ON r.horario_id = h.id
       LEFT JOIN mesas m ON r.mesa_id = m.id
       LEFT JOIN salones s ON m.salon_id = s.id
-      WHERE r.mesa_id = $1 AND r.fecha_reserva = $2
-      ORDER BY h.hora_inicio ASC
+      WHERE r.mesa_id = $1 AND DATE(r.fecha_reserva) = $2
+      ORDER BY r.fecha_reserva ASC
     `;
-    const result = await pool.query(query, [mesa_id, fecha]);
-    res.json({ reservas: result.rows });
+
+    console.log('📋 Ejecutando query SQL:', query);
+    console.log('📋 Parámetros:', [mesaId, fecha]);
+
+    const result = await pool.query(query, [mesaId, fecha]);
+    const reservas = result.rows as any[];
+
+    console.log('✅ Reservas encontradas:', reservas.length);
+    if (reservas.length > 0) {
+      console.log('📊 Primera reserva como ejemplo:', JSON.stringify(reservas[0], null, 2));
+    }
+
+    res.json({
+      success: true,
+      reservas: reservas
+    });
+
   } catch (error) {
-    console.error('Error en getReservasByMesa:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    console.error('💥 Error en getReservasByMesa:', error);
+    console.error('💥 Stack trace:', (error as Error).stack);
+    res.status(500).json({
+      success: false,
+      message: 'Error interno del servidor',
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    });
   }
 };
 
+// ...existing code...
+
+// ...existing code...
 // Obtener reserva por ID (LEFT JOIN para admitir walk-in sin cliente)
 export const getReservaById = async (req: Request, res: Response) => {
   try {

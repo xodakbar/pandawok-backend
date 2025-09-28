@@ -7,7 +7,12 @@ export const getMesasPorSalon = async (req: Request, res: Response): Promise<voi
     const { salon_id } = req.params;
     const salonId = Number(salon_id);
 
+    console.log(`🔍 [MESAS] Solicitud de mesas para salón ID: ${salonId}`);
+    console.log(`📅 [MESAS] Timestamp: ${new Date().toISOString()}`);
+    console.log(`🌐 [MESAS] IP Cliente: ${req.ip || req.connection.remoteAddress}`);
+
     if (isNaN(salonId)) {
+      console.log(`❌ [MESAS] ID de salón inválido: ${salon_id}`);
       res.status(400).json({ message: 'ID de salón inválido' });
       return;
     }
@@ -31,9 +36,12 @@ export const getMesasPorSalon = async (req: Request, res: Response): Promise<voi
 
     const { rows } = await pool.query(query, [salonId]);
 
+    console.log(`✅ [MESAS] Encontradas ${rows.length} mesas activas en salón ${salonId}`);
+    console.log(`📋 [MESAS] Mesas encontradas:`, rows.map(m => `Mesa ${m.numero_mesa} (ID: ${m.id})`).join(', '));
+
     res.json(rows);
   } catch (error) {
-    console.error('Error obteniendo mesas:', error);
+    console.error('❌ [MESAS] Error obteniendo mesas:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Error interno del servidor' 
