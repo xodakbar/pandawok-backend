@@ -7,6 +7,10 @@ router.get('/horarios-disponibles', (req, res, next) => {
   horariosController.getHorariosDisponibles(req, res).catch(next);
 });
 
+router.get('/todos-los-horarios', (req, res, next) => {
+  horariosController.getTodosLosHorarios(req, res).catch(next);
+});
+
 router.put('/:id', (req, res, next) => {
   horariosController.updateHorario(req,res).catch(next)
   // TODO: implement the update logic or call the appropriate controller method

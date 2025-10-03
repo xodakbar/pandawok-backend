@@ -30,6 +30,29 @@ export const getHorariosDisponibles = async (req: Request, res: Response) => {
   }
 };
 
+export const getTodosLosHorarios = async (req: Request, res: Response) => {
+  const { fecha } = req.query;
+
+  if (!fecha) {
+    return res.status(400).json({ error: 'Falta parámetro fecha' });
+  }
+
+  try {
+    const query = `
+      SELECT hd.id, hd.hora_inicio, hd.hora_fin
+      FROM horarios_disponibles hd
+      WHERE hd.esta_activo = true
+      ORDER BY hd.hora_inicio;
+    `;
+
+    const result = await pool.query(query, []);
+    return res.json({ success: true, horarios: result.rows });
+  } catch (error) {
+    console.error('Error obteniendo todos los horarios:', error);
+    return res.status(500).json({ error: 'Error interno' });
+  }
+};
+
 
 
 export const updateHorario = async (req: Request, res: Response) => {
