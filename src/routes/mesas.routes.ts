@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getMesasPorSalon,
   actualizarPosicionMesa,
+  actualizarMesa,
   agregarMesa,
   eliminarMesa
 } from '../controllers/mesas.controller';
@@ -12,6 +13,8 @@ const router = Router();
 router.get('/salon/:salon_id/mesas', getMesasPorSalon);
 // Actualizar posición de una mesa
 router.put('/:id/posicion', actualizarPosicionMesa);
+// Actualizar una mesa completa
+router.put('/:id', actualizarMesa);
 
 // Agregar una nueva mesa
 router.post('/', agregarMesa);

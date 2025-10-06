@@ -133,6 +133,61 @@ export const agregarMesa = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
+// Actualizar una mesa completa
+export const actualizarMesa = async (req: Request, res: Response): Promise<void> => {
+  const mesaId = Number(req.params.id);
+  const { salon_id, numero_mesa, tipo_mesa, tamanio, capacidad, esta_activa } = req.body;
+
+  if (isNaN(mesaId)) {
+    res.status(400).json({ message: 'ID de mesa inválido' });
+    return;
+  }
+
+  // Validaciones básicas
+  if (
+    typeof salon_id !== 'number' ||
+    typeof numero_mesa !== 'string' ||
+    typeof tipo_mesa !== 'string' ||
+    typeof tamanio !== 'string' ||
+    typeof capacidad !== 'number' ||
+    typeof esta_activa !== 'boolean'
+  ) {
+    res.status(400).json({ message: 'Datos inválidos o incompletos para actualizar mesa' });
+    return;
+  }
+
+  try {
+    // Validar que no exista otra mesa con el mismo numero_mesa en el mismo salon_id
+    const checkQuery = `SELECT id FROM mesas WHERE salon_id = $1 AND numero_mesa = $2 AND id != $3`;
+    const { rows: existingRows } = await pool.query(checkQuery, [salon_id, numero_mesa, mesaId]);
+
+    if (existingRows.length > 0) {
+      res.status(400).json({ message: `Ya existe otra mesa con el número ${numero_mesa} en este salón.` });
+      return;
+    }
+
+    const updateQuery = `
+      UPDATE mesas
+      SET salon_id = $1, numero_mesa = $2, tipo_mesa = $3, tamanio = $4, capacidad = $5, esta_activa = $6
+      WHERE id = $7
+      RETURNING id, salon_id, numero_mesa, tipo_mesa, tamanio, capacidad, esta_activa, posx AS "posX", posy AS "posY"
+    `;
+
+    const values = [salon_id, numero_mesa, tipo_mesa, tamanio, capacidad, esta_activa, mesaId];
+
+    const { rows } = await pool.query(updateQuery, values);
+
+    if (rows.length === 0) {
+      res.status(404).json({ message: 'Mesa no encontrada' });
+    } else {
+      res.json({ message: 'Mesa actualizada exitosamente', mesa: rows[0] });
+    }
+  } catch (error) {
+    console.error('Error actualizando mesa:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+};
+
 // Eliminar una mesa por id
 export const eliminarMesa = async (req: Request, res: Response): Promise<void> => {
   const mesaId = Number(req.params.id);

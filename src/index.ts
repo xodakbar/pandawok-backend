@@ -64,9 +64,9 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/estadisticas', estadisticasRoutes);
 app.use('/api/reservas', reservasRoutes);
 app.use('/api/waiting-list', waitingListRoutes);
+app.use('/api/mesas/bloqueos', mesaBloqueosRoutes); // Más específico primero
 app.use('/api/mesas', mesasRoutes);
 app.use('/api/salones', salonRoutes);
-app.use('/api/mesas/bloqueos', mesaBloqueosRoutes);
 
 // Nueva ruta para tags
 app.use('/api/tags', tagsRoutes);
