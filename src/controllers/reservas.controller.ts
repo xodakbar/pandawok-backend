@@ -32,6 +32,10 @@ export const createReserva = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Faltan datos obligatorios para crear reserva' });
     }
 
+    // Log para verificar fecha recibida
+    console.log('Fecha recibida del frontend:', fecha_reserva);
+    console.log('Zona horaria servidor:', process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone);
+    
     await client.query('BEGIN');
 
     // 1️⃣ Crear o actualizar cliente
@@ -69,7 +73,7 @@ export const createReserva = async (req: Request, res: Response) => {
     // 4️⃣ Crear reserva
     const reservaQuery = `
       INSERT INTO reservas (cliente_id, mesa_id, horario_id, fecha_reserva, cantidad_personas, notas, estado)
-      VALUES ($1, $2, $3, $4, $5, $6, 'pendiente')
+      VALUES ($1, $2, $3, $4::date, $5, $6, 'pendiente')
       RETURNING *
     `;
     const reservaResult = await client.query(reservaQuery, [
@@ -188,7 +192,7 @@ export const createReservaWalkIn = async (req: Request, res: Response) => {
     const reservaQuery = `
       INSERT INTO reservas (
         cliente_id, mesa_id, horario_id, fecha_reserva, cantidad_personas, notas
-      ) VALUES (NULL, $1, $2, $3, $4, $5)
+      ) VALUES (NULL, $1, $2, $3::date, $4, $5)
       RETURNING *
     `;
 
@@ -260,7 +264,7 @@ export const updateReserva = async (req: Request, res: Response) => {
         cliente_id = $1,
         mesa_id = COALESCE($2, NULL::integer),
         horario_id = COALESCE($3, NULL::integer),
-        fecha_reserva = $4,
+        fecha_reserva = $4::date,
         cantidad_personas = $5,
         notas = $6
       WHERE id = $7
