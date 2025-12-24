@@ -32,9 +32,10 @@ export const createReserva = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Faltan datos obligatorios para crear reserva' });
     }
 
-    // Log para verificar fecha recibida
-    console.log('Fecha recibida del frontend:', fecha_reserva);
-    console.log('Zona horaria servidor:', process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone);
+    // Normalizar fecha: extraer solo YYYY-MM-DD (compatible con ambos formatos)
+    // Soporta: "2025-12-25" o "2025-12-25T03:00:00.000Z"
+    const fechaNormalizada = fecha_reserva.split('T')[0];
+    console.log('📅 Fecha recibida:', fecha_reserva, '→ Normalizada:', fechaNormalizada);
     
     await client.query('BEGIN');
 
@@ -62,7 +63,7 @@ export const createReserva = async (req: Request, res: Response) => {
     `;
     const duplicadoResult: QueryResult<any> = await client.query(duplicadoQuery, [
       cliente.id,
-      fecha_reserva,
+      fechaNormalizada,
       horario_id,
     ]);
     if ((duplicadoResult.rowCount ?? 0) > 0) {
@@ -80,7 +81,7 @@ export const createReserva = async (req: Request, res: Response) => {
       cliente.id,
       mesa_id ?? null,
       horario_id ?? null,
-      fecha_reserva,
+      fechaNormalizada,
       cantidad_personas,
       notas && notas.trim() !== '' ? notas : null,
     ]);
@@ -115,10 +116,14 @@ export const createReserva = async (req: Request, res: Response) => {
 
 
     // 9️⃣ Enviar correo al cliente
+    // Formatear fecha sin crear objeto Date (evita problemas de timezone)
+    const [year, month, day] = fechaNormalizada.split('-');
+    const fechaFormateada = `${day}/${month}/${year}`;
+    
     const subject = 'Confirma tu reserva en PandaWok';
     const html = `
       <p>Hola ${nombre} ${apellido},</p>
-      <p>Tu reserva para el día ${new Date(fecha_reserva).toLocaleDateString()} está pendiente.</p>
+      <p>Tu reserva para el día ${fechaFormateada} está pendiente.</p>
       <p>Por favor confirma o rechaza tu hora:</p>
       <p>
         <a href="${confirmUrl}" style="padding:10px 20px; background-color:#28a745; color:white; text-decoration:none; margin-right:10px;">Confirmar</a>
@@ -187,6 +192,10 @@ export const createReservaWalkIn = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Faltan datos obligatorios para crear reserva walk-in' });
     }
 
+    // Normalizar fecha
+    const fechaNormalizada = fecha_reserva.split('T')[0];
+    console.log('📅 Walk-in fecha:', fecha_reserva, '→', fechaNormalizada);
+
     await client.query('BEGIN');
 
     const reservaQuery = `
@@ -199,7 +208,7 @@ export const createReservaWalkIn = async (req: Request, res: Response) => {
     const reservaResult = await client.query(reservaQuery, [
       mesa_id,
       horario_id,
-      fecha_reserva,
+      fechaNormalizada,
       cantidad_personas,
       notas && notas.trim() !== '' ? notas : null,
     ]);
@@ -257,6 +266,9 @@ export const updateReserva = async (req: Request, res: Response) => {
     const mesaId = (mesa_id === undefined || mesa_id === null || mesa_id === 'null') ? null : Number(mesa_id);
     const horarioId = (horario_id === undefined || horario_id === null || horario_id === 'null') ? null : Number(horario_id);
 
+    // Normalizar fecha
+    const fechaNormalizada = fecha_reserva.split('T')[0];
+
     await client.query('BEGIN');
 
     const reservaUpdateQuery = `
@@ -275,7 +287,7 @@ export const updateReserva = async (req: Request, res: Response) => {
       clienteId,
       mesaId,
       horarioId,
-      fecha_reserva,
+      fechaNormalizada,
       cantidad_personas,
       notas && notas.trim() !== '' ? notas : null,
       id,
