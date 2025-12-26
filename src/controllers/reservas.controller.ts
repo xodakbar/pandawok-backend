@@ -731,6 +731,9 @@ export const actualizarEstadoReserva = async (req: Request, res: Response) => {
 
     const cliente = clienteResult.rows[0];
 
+    // ⚠️ CORREO DESHABILITADO: El frontend (ConfirmarReserva.tsx) maneja el envío de emails
+    // cuando el estado cambia a 'confirmada' usando EmailJS con plantillas profesionales
+    /*
     if (!cliente.correo_electronico) {
       console.warn(`Cliente ${cliente.nombre} ${cliente.apellido} no tiene correo electrónico válido.`);
     } else {
@@ -751,6 +754,7 @@ PandaWok.`;
         console.error('Error enviando correo:', mailError);
       });
     }
+    */
 
     return res.json({
       success: true,
